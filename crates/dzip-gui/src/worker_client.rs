@@ -74,7 +74,7 @@ impl WorkerClient {
             } else {
                 event.message()
             };
-            log::error!(target: "dzip_gui::worker", "{message}");
+            crate::session_log::event!(log::Level::Error, "{message}");
             for (_, request) in error_pending.borrow_mut().drain() {
                 let _ = request
                     .reject
@@ -82,7 +82,7 @@ impl WorkerClient {
             }
         });
         worker.set_onerror(Some(onerror.as_ref().unchecked_ref()));
-        log::info!(target: "dzip_gui::worker", "Dzip stateful Web Worker initialized");
+        crate::session_log::event!(log::Level::Info, "Dzip stateful Web Worker initialized");
 
         Ok(Self {
             worker,

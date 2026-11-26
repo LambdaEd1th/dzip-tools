@@ -1,0 +1,29 @@
+name: Set up Native Shell for the Web
+description: Install the CLI and wasm-bindgen used by the Linux Web CI and release jobs.
+runs:
+  using: composite
+  steps:
+    - name: Install native build and WebAssembly tools
+      shell: bash
+      run: |
+        # NSH describes the Rust component on the build host before compiling
+        # the WebAssembly app. The Linux host build links GTK.
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends clang llvm libgtk-4-dev pkg-config
+    - name: Install NSH 0.7.1
+      shell: bash
+      run: |
+        set -euo pipefail
+        tools="$(mktemp -d)"
+        cd "$tools"
+        release=https://github.com/longbridge/nsh/releases/download/v0.7.1
+        curl -fsSL --retry 3 "$release/nsh-linux-x86_64.tar.gz" -o nsh.tar.gz
+        curl -fsSL --retry 3 "$release/nsh-web.tar.gz" -o nsh-web.tar.gz
+        echo '04457ad3a53c91b66efcee537968c5af7c90df25cf61c18d51135ecc051e22b3  nsh.tar.gz' | sha256sum -c -
+        echo 'a82f31022775cb88267fa57548665c8da7dba4b62f044a4945c17397ff0b99d6  nsh-web.tar.gz' | sha256sum -c -
+        tar xzf nsh.tar.gz
+        tar xzf nsh-web.tar.gz
+        echo "$tools/nsh/bin" >> "$GITHUB_PATH"
+    - name: Install wasm-bindgen
+      shell: bash
+      run: cargo install wasm-bindgen-cli --locked --version 0.2.130

@@ -6,11 +6,13 @@ repository.workspace = true
 license.workspace = true
 publish.workspace = true
 authors = ["LambdaEd1th"]
-description = "Cross-platform Dioxus archive manager for Dzip files"
+description = "Native Shell desktop and Web archive manager for Dzip files"
 
 [package.metadata.bundle]
 name = "Dzip Archive"
 identifier = "dev.lambdaedith.dzip"
+# The directory link preserves the bundle path while NSH reads the same files from locales/.
+resources = ["assets/locales/*.toml"]
 category = "public.app-category.utilities"
 short_description = "A modern Dzip archive manager"
 long_description = "Open, inspect, extract, and create Dzip archives from one cross-platform interface."
@@ -18,6 +20,7 @@ long_description = "Open, inspect, extract, and create Dzip archives from one cr
 [package.metadata.bundle.bin.dzip-gui]
 name = "Dzip Archive"
 identifier = "dev.lambdaedith.dzip"
+resources = ["assets/locales/*.toml"]
 category = "public.app-category.utilities"
 short_description = "A modern Dzip archive manager"
 long_description = "Open, inspect, extract, and create Dzip archives from one cross-platform interface."
@@ -27,22 +30,49 @@ name = "dzip-gui"
 path = "src/main.rs"
 
 [dependencies]
-dioxus = { version = "0.7", optional = true, default-features = false, features = ["asset", "document", "hooks", "html", "launch", "logger", "macro", "signals", "warnings"] }
+base64 = "0.23"
+nsh-core = { version = "=0.7.1", features = ["svg"] }
+nsh-base = { version = "=0.7.1", default-features = false }
 dzip.workspace = true
 dzip-workflow = { workspace = true, features = ["protocol"] }
-fluent-bundle = { version = "0.16", optional = true }
-futures-timer = { version = "3", optional = true }
-log = { workspace = true, optional = true }
-rfd = { version = "0.17", optional = true, default-features = false, features = ["xdg-portal"] }
+futures-channel = "0.3"
+futures-util = "0.3"
+log.workspace = true
 serde.workspace = true
-serde-wasm-bindgen = { workspace = true, optional = true }
 serde_bytes.workspace = true
 serde_json.workspace = true
-unic-langid = { version = "0.9", optional = true }
-wasm-bindgen = { workspace = true, optional = true }
-wasm-bindgen-futures = { version = "0.4", optional = true }
-js-sys = { version = "0.3", optional = true }
-web-sys = { version = "0.3", optional = true, features = [
+
+[build-dependencies]
+nsh-i18n = { version = "=0.7.1", features = ["build"] }
+
+[target.'cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))'.dependencies]
+toml = { version = "1.2", default-features = false, features = ["std", "serde", "parse"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+nsh-platform-apple = { version = "=0.7.1", default-features = false }
+nsh-platform-macos = { version = "=0.7.1", default-features = false, features = ["svg"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+nsh-platform-windows = { version = "=0.7.1", default-features = false, features = ["svg"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+nsh-platform-linux = { version = "=0.7.1", default-features = false, features = ["svg"] }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+dzip-workflow = { workspace = true, features = ["parallel"] }
+nsh-engine = { version = "=0.7.1", default-features = false }
+url = "2"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+serde-wasm-bindgen.workspace = true
+wasm-bindgen.workspace = true
+wasm-bindgen-futures = "0.4"
+js-sys = "0.3"
+web-sys = { version = "0.3", features = [
+    "Event",
+    "EventTarget",
+    "HtmlInputElement",
+    "Node",
     "Blob",
     "CssStyleDeclaration",
     "DataTransfer",
@@ -61,7 +91,6 @@ web-sys = { version = "0.3", optional = true, features = [
     "HtmlElement",
     "Location",
     "MessageEvent",
-    "Navigator",
     "Storage",
     "Url",
     "Window",
@@ -73,25 +102,5 @@ web-sys = { version = "0.3", optional = true, features = [
 [features]
 default = ["desktop"]
 bundle = []
-desktop = [
-    "dep:dioxus",
-    "dioxus/desktop",
-    "dzip-workflow/parallel",
-    "dep:fluent-bundle",
-    "dep:futures-timer",
-    "dep:log",
-    "dep:rfd",
-    "dep:unic-langid",
-]
-web = [
-    "dep:dioxus",
-    "dioxus/web",
-    "dep:fluent-bundle",
-    "dep:js-sys",
-    "dep:log",
-    "dep:serde-wasm-bindgen",
-    "dep:unic-langid",
-    "dep:wasm-bindgen",
-    "dep:wasm-bindgen-futures",
-    "dep:web-sys",
-]
+desktop = []
+web = []

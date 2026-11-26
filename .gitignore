@@ -4,6 +4,7 @@
 # The target directory contains all build artifacts and dependencies.
 # It is heavy and should never be committed.
 /target/
+/crates/dzip-gui/target/
 
 # ----------------------------------------------------------------------------
 # Cargo Files
@@ -71,6 +72,8 @@ Desktop.ini
 # Project Specific
 # ----------------------------------------------------------------------------
 # Temporary directories created by CLI commands or tests
+/.nsh/
+/crates/dzip-gui/.nsh/
 temp_*/
 output/
 *_unpacked/

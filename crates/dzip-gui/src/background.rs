@@ -1,7 +1,7 @@
+use crate::model::{DraftFile, DzCompressionOptions, LoadedArchive};
 use crate::task::run_archive_task as dispatch_archive_task;
 use dzip::ArchivePathKey;
-use dzip_gui::model::{DraftFile, DzCompressionOptions, LoadedArchive};
-#[cfg(feature = "web")]
+#[cfg(target_arch = "wasm32")]
 use dzip_workflow::ExtractedFile;
 use dzip_workflow::{
     ArchiveTask, ArchiveTaskResponse, BuildPlan, EditableEntry, NamedBytes, SessionId,
@@ -119,7 +119,7 @@ pub async fn build_archive(
     }
 }
 
-#[cfg(feature = "web")]
+#[cfg(target_arch = "wasm32")]
 pub async fn make_store_zip(files: Vec<(String, Vec<u8>)>) -> Result<Vec<u8>, String> {
     let response = run_archive_task(ArchiveTask::MakeStoreZip {
         files: files

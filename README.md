@@ -5,7 +5,7 @@
 Command-line and graphical applications for reading, extracting, creating, and
 inspecting Dzip archives. This workspace contains the shared DCL and
 application-workflow layers, the `dzip-cli` command-line application, and a
-Dioxus desktop/Web archive manager. The reusable library is maintained in
+Native Shell desktop/Web archive manager. The reusable library is maintained in
 [dzip-archive](https://github.com/LambdaEd1th/dzip-archive) and pinned here as a Git
 submodule.
 
@@ -180,34 +180,31 @@ entry traversal and recursive include cycles are still rejected.
 
 ## GUI
 
-`dzip-gui` is a Dioxus archive manager that shares one responsive interface
+`dzip-gui` is a Native Shell archive manager that shares one responsive Rust interface
 between native desktop builds and the browser. It can open and inspect archives,
 search and select entries, extract files, and create new archives with DZ, Zlib,
 Bzip, LZMA, copy, or zero-fill encoding.
 
-Install the Dioxus CLI and the Web Worker builder:
+Start the desktop app from the workspace root. Linux builds require GTK 4.14 or newer and its development headers.
 
 ```bash
-cargo install dioxus-cli --version 0.7.10 --locked
-cargo install wasm-pack --version 0.15.0 --locked
+cargo run -p dzip-gui --features desktop
 ```
 
-Then start the desktop app:
+For the browser, install the [Native Shell CLI 0.7.1](https://github.com/longbridge/nsh/releases/tag/v0.7.1)
+for your host and put its `nsh` binary on your PATH. The Web build also uses Clang,
+LLVM's archiver and the matching wasm-bindgen CLI.
 
 ```bash
-dx serve --package dzip-gui --platform desktop
+rustup target add wasm32-unknown-unknown
+cargo install wasm-bindgen-cli --version 0.2.130 --locked
 ```
 
-Start the WebAssembly version:
+Build the Web app with its archive worker and serve it at `http://localhost:8080`.
 
 ```bash
-wasm-pack build crates/dzip-worker \
-  --target web \
-  --release \
-  --no-opt \
-  --out-dir ../dzip-gui/assets/worker/pkg \
-  --out-name dzip_gui_worker
-dx serve --package dzip-gui --platform web
+bash scripts/build-web.sh
+python3 -m http.server 8080 --directory 'target/nsh-web/Dzip Archive'
 ```
 
 The desktop build saves archives with the native file dialog and extracts to a
@@ -220,8 +217,70 @@ volume through the UI. Codec work remains parallel on supported desktop builds.
 The web build processes files entirely in WebAssembly, downloads created `.dz`
 archives directly, and bundles extracted entries into a browser-friendly ZIP
 download. Select the main `.dz` file and its auxiliary volumes together when
-opening a split archive. Run the `wasm-pack build` command above before a manual
-`dx build --package dzip-gui --platform web` from the workspace root.
+opening a split archive.
+
+The window, archive browser, editor, dialogs, icons, and responsive layout
+are authored in Rust under `crates/dzip-gui/src`. Both targets share those
+views; the Web build uses generated browser glue and a small worker bootstrap.
+No HTML/CSS copy of the application is needed for the desktop build.
+
+**Desktop translations.** Edit a language's TOML file in the resource directory
+for your build, then quit and reopen the GUI. No rebuild or import is needed.
+Desktop packages include the five default catalogs:
+
+| Desktop build | Where to edit (Chinese example) |
+| --- | --- |
+| macOS app | `Dzip Archive.app/Contents/Resources/assets/locales/zh.toml` (Finder → Show Package Contents) |
+| Windows ZIP | `assets/locales/zh.toml` beside `dzip-gui.exe` |
+| Linux portable ZIP or a standalone Cargo binary | `assets/locales/zh.toml` beside the GUI executable |
+| Debian installation | `/usr/lib/dzip-gui/assets/locales/zh.toml` |
+
+On Linux, when the GUI is in `<prefix>/bin/`, it first looks for
+`<prefix>/lib/dzip-gui/assets/locales/`. If that directory is absent, it uses
+`assets/locales/` beside the executable. This also works with an extracted
+Debian package, without installing it system-wide.
+
+The working directory is never searched. If you used the earlier layout, copy
+your customized TOML files from the old `locales/` folder to the location above;
+the old folder is no longer read. Editing resources in a signed macOS app
+invalidates its signature, and a package update can replace your edits. Keep a
+copy of customized files.
+
+A file can override just one key; omitted keys fall back to the bundled
+translations. For example, a `zh.toml` containing only
+`page-archive-manager = "我的归档"` changes the archive page title when
+Chinese is selected. Keep named placeholders such as `%{name}` intact:
+entries with mismatched placeholders are skipped. To add a language, use
+its tag as the filename (e.g. `ja.toml`) and set `language-self = "日本語"`
+for its name in Settings. To undo an override, remove the corresponding
+file or key and restart. Invalid TOML files are ignored.
+
+For example, after building a default Cargo debug binary, copy a catalog into
+its resource directory, edit the copy, then rerun `target/debug/dzip-gui`:
+
+```bash
+mkdir -p target/debug/assets/locales
+cp -i crates/dzip-gui/locales/zh.toml target/debug/assets/locales/
+```
+
+The sources for the built-in translations are in `crates/dzip-gui/locales/`.
+Web uses only these bundled translations. Both targets follow the device's
+preferred languages unless a language was selected in Settings.
+
+**GUI logs.** Native Shell sends desktop diagnostics to the platform logger and
+rotates `app.log` under the app's data directory (`dev.lambdaedith.dzip/logs/`).
+Use `RUST_LOG` to adjust the desktop filter. In the browser, NSH uses the
+developer console. On both targets, Settings → Logs shows the latest 300 GUI
+records from the current session. Export saves that view; Clear doesn't erase
+desktop log files or the browser console.
+
+For a browser round-trip test, serve the bundle as above and run
+`node scripts/smoke-web.cjs http://localhost:8080/` with Playwright available
+to Node (see the script header). It imports a fixture through the file chooser,
+edits and splits it, then checks the exported files against the original bytes.
+Pass `--i18n` after the URL to run just the language-switching and preference tests.
+Use `--logs` to test notices and session logs, or `--controls` to test keyboard
+selection, nested dialogs and focus restoration.
 
 ## Workspace
 
@@ -230,7 +289,7 @@ crates/
 ├── dzip-cli/             CLI and DCL compatibility frontend
 ├── dzip-dcl/             Reusable dzip.exe-compatible DCL parser
 ├── dzip-workflow/        Shared plans, lazy sessions, typed protocol, and exports
-├── dzip-gui/             Dioxus views plus pure browser/input state modules
+├── dzip-gui/             Native Shell views, file browser, and input state
 └── dzip-worker/          Browser Worker runtime for archive operations
 vendor/
 └── dzip/                 Pinned dzip-archive submodule with integrated codecs
@@ -245,7 +304,7 @@ have passed its CI.
 
 This application workspace is distributed through GitHub Releases rather than
 crates.io. Application crates inherit the workspace version, and a release tag
-such as `v0.4.3` must match `dzip-cli` before the release workflow builds
+such as `v0.5.0` must match `dzip-cli` and the GUI manifest before the release workflow builds
 artifacts. The core library has its own version and release tags.
 
 ## Replacing a `.dz` file in an Android APK

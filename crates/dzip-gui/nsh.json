@@ -1,0 +1,17 @@
+{
+  "name": "Dzip Archive",
+  "id": "dev.lambdaedith.dzip",
+  "version": "0.5.0",
+  "build": 1,
+  "nsh": "=0.7.1",
+  "rust": ".",
+  "root": "App",
+  "web": { "host": "web/log-host.js" },
+  "window": { "defaultSize": { "width": 1280, "height": 800 } },
+  "capabilities": {
+    "application": true,
+    "windows": { "kinds": ["normal"], "levels": ["normal"], "max": 1 },
+    "picker": true,
+    "openUrl": { "schemes": ["https"] }
+  }
+}

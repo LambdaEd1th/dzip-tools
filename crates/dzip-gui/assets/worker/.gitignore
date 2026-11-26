@@ -1,5 +1,0 @@
-*
-!.gitignore
-!dzip-worker.js
-!pkg/
-!pkg/**

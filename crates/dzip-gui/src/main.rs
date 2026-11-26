@@ -1,26 +1,38 @@
-#![cfg_attr(feature = "bundle", windows_subsystem = "windows")]
+#![cfg_attr(
+    all(target_os = "windows", feature = "bundle"),
+    windows_subsystem = "windows"
+)]
 
-#[cfg(all(feature = "desktop", feature = "web"))]
-compile_error!("features `desktop` and `web` are mutually exclusive");
-#[cfg(not(any(feature = "desktop", feature = "web")))]
-compile_error!("enable either the `desktop` or `web` feature");
+#[cfg(target_os = "linux")]
+use nsh_platform_linux as platform;
+#[cfg(target_os = "macos")]
+use nsh_platform_macos as platform;
+#[cfg(target_os = "windows")]
+use nsh_platform_windows as platform;
 
-mod app;
-mod app_i18n;
-mod archive_input;
-mod background;
-mod browser;
-mod components;
-mod file_drop;
-mod i18n;
-mod icons;
-mod platform;
-mod preferences;
-mod state;
-mod task;
-#[cfg(feature = "web")]
-mod worker_client;
+#[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
+mod desktop_logging;
 
-fn main() {
-    app::launch();
+#[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
+fn main() -> impl std::process::Termination {
+    let manifest: serde_json::Value =
+        serde_json::from_str(include_str!("../nsh.json")).expect("valid NSH manifest");
+    let app_id = manifest["id"].as_str().expect("NSH application id");
+    desktop_logging::install(app_id);
+    let root = platform::Root::of::<dzip_gui::App>()
+        .translations_json(include_str!(concat!(env!("OUT_DIR"), "/translations.json")))
+        .app_id(app_id)
+        .capabilities_json(&manifest["capabilities"].to_string());
+    platform::run_app(
+        platform::AppSource::Rust(root),
+        platform::AppOptions {
+            app_id: app_id.into(),
+            title: "Dzip Archive".into(),
+            size: (1280, 800),
+            ..Default::default()
+        },
+    )
 }
+
+#[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
+fn main() {}
