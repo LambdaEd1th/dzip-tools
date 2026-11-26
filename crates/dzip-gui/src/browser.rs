@@ -1,6 +1,6 @@
 //! Pure archive-browser projection and path operations.
 
-use dzip_gui::model::{DraftFile, EntryView};
+use crate::model::{DraftFile, EntryView};
 use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -230,7 +230,7 @@ pub(crate) fn join_archive_path(directory: &str, path: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use dzip_gui::model::CompressionChoice;
+    use crate::model::CompressionChoice;
     use std::sync::Arc;
 
     fn entry(id: usize, path: &str, size: u64) -> EntryView {

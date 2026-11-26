@@ -16,8 +16,7 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
-  DX_VERSION: 0.7.10
-  WEB_DIST: target/dx/dzip-gui/release/web/public
+  WEB_DIST: target/nsh-web/Dzip Archive
 
 jobs:
   validate_version:
@@ -33,14 +32,15 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Match Git tag to Cargo version
+      - name: Match Git tag to Cargo and GUI versions
         shell: bash
         run: |
           PACKAGE_VERSION=$(cargo metadata --no-deps --format-version 1 |
             jq -r '.packages[] | select(.name == "dzip-cli") | .version')
+          GUI_VERSION=$(jq -er '.version' crates/dzip-gui/nsh.json)
           TAG_VERSION=${GITHUB_REF_NAME#v}
-          if [[ -z "$PACKAGE_VERSION" || "$TAG_VERSION" != "$PACKAGE_VERSION" ]]; then
-            echo "Release tag ${GITHUB_REF_NAME} does not match Cargo version ${PACKAGE_VERSION}." >&2
+          if [[ -z "$PACKAGE_VERSION" || "$TAG_VERSION" != "$PACKAGE_VERSION" || "$TAG_VERSION" != "$GUI_VERSION" ]]; then
+            echo "Release version mismatch: tag=$GITHUB_REF_NAME Cargo=$PACKAGE_VERSION GUI=$GUI_VERSION" >&2
             exit 1
           fi
 
@@ -90,11 +90,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             dpkg-dev \
-            libayatana-appindicator3-dev \
-            libgtk-3-dev \
-            libxdo-dev \
-            librsvg2-dev \
-            libwebkit2gtk-4.1-dev \
+            libgtk-4-dev \
             pkg-config
 
       - name: Setup Rust
@@ -110,7 +106,7 @@ jobs:
 
       - name: Install cargo-bundle
         if: matrix.package_app == true || matrix.package_deb == true
-        run: cargo install cargo-bundle --locked --version 0.10.0
+        run: cargo install cargo-bundle --locked --version 0.12.0
 
       - name: Build macOS app bundle
         if: matrix.package_app == true
@@ -123,8 +119,9 @@ jobs:
         run: |
           APP_PATH=$(find target/release/bundle/osx -maxdepth 1 -name '*.app' -print -quit)
           test -n "$APP_PATH"
-          mkdir -p "$APP_PATH/Contents/Resources"
-          cp -R crates/dzip-gui/assets "$APP_PATH/Contents/Resources/assets"
+          for locale in crates/dzip-gui/locales/*.toml; do
+            cmp "$locale" "$APP_PATH/Contents/Resources/assets/locales/${locale##*/}"
+          done
           PACKAGE_DIR="${{ matrix.artifact }}-${{ github.ref_name }}"
           mkdir "$PACKAGE_DIR"
           ditto "$APP_PATH" "$PACKAGE_DIR/$(basename "$APP_PATH")"
@@ -143,12 +140,17 @@ jobs:
         run: |
           DEB_PATH=$(find target/release/bundle/deb -maxdepth 1 -name '*.deb' -print -quit)
           test -n "$DEB_PATH"
+          DEB_ROOT=$(mktemp -d)
+          dpkg-deb -x "$DEB_PATH" "$DEB_ROOT"
+          for locale in crates/dzip-gui/locales/*.toml; do
+            cmp "$locale" "$DEB_ROOT/usr/lib/dzip-gui/assets/locales/${locale##*/}"
+          done
           PACKAGE_DIR="${{ matrix.artifact }}-${{ github.ref_name }}"
-          mkdir "$PACKAGE_DIR"
+          mkdir -p "$PACKAGE_DIR/assets"
           cp "$DEB_PATH" "$PACKAGE_DIR/dzip-archive-${{ github.ref_name }}.deb"
-          cp "target/release/${{ matrix.cli_binary }}" "$PACKAGE_DIR/"
+          cp "target/release/${{ matrix.gui_binary }}" "target/release/${{ matrix.cli_binary }}" "$PACKAGE_DIR/"
+          cp -R crates/dzip-gui/locales "$PACKAGE_DIR/assets/locales"
           cp README.md LICENSE "$PACKAGE_DIR/"
-          cp -R crates/dzip-gui/assets "$PACKAGE_DIR/assets"
           zip -r "$PACKAGE_DIR.zip" "$PACKAGE_DIR"
 
       - name: Package binary (Windows)
@@ -156,12 +158,21 @@ jobs:
         shell: pwsh
         run: |
           $packageDir = "${{ matrix.artifact }}-${{ github.ref_name }}"
-          New-Item -ItemType Directory -Path $packageDir | Out-Null
+          New-Item -ItemType Directory -Path "$packageDir/assets" -Force | Out-Null
           Copy-Item "target/release/${{ matrix.gui_binary }}" "$packageDir/"
           Copy-Item "target/release/${{ matrix.cli_binary }}" "$packageDir/"
-          Copy-Item crates/dzip-gui/assets "$packageDir/assets" -Recurse
+          Copy-Item -Recurse crates/dzip-gui/locales "$packageDir/assets/locales"
           Copy-Item README.md, LICENSE "$packageDir/"
           Compress-Archive -Path $packageDir -DestinationPath "$packageDir.zip"
+          $archive = [IO.Compression.ZipFile]::OpenRead("$packageDir.zip")
+          try {
+            $entries = $archive.Entries | ForEach-Object { $_.FullName.Replace('\', '/') }
+            if ($entries -notcontains "$packageDir/${{ matrix.gui_binary }}") { throw "Missing GUI executable in ZIP" }
+            foreach ($locale in Get-ChildItem crates/dzip-gui/locales -Filter '*.toml' -File) {
+              $entry = "$packageDir/assets/locales/$($locale.Name)"
+              if ($entries -notcontains $entry) { throw "Missing $entry in ZIP" }
+            }
+          } finally { $archive.Dispose() }
 
       - name: Upload Windows artifact
         if: matrix.package_zip == true
@@ -203,41 +214,11 @@ jobs:
       - name: Cache Rust
         uses: Swatinem/rust-cache@v2
 
-      - name: Cache Dioxus CLI
-        uses: actions/cache@v6
-        with:
-          path: ~/.cargo/bin/dx
-          key: ${{ runner.os }}-dx-${{ env.DX_VERSION }}
+      - name: Install Native Shell build tools
+        uses: ./.github/actions/setup-nsh-web
 
-      - name: Install Dioxus CLI
-        run: |
-          if ! command -v dx >/dev/null 2>&1 || ! dx --version | grep -q "dioxus ${DX_VERSION}"; then
-            cargo +stable install dioxus-cli --version "${DX_VERSION}" --locked
-          fi
-
-      - name: Install wasm-pack
-        run: cargo +stable install wasm-pack --version 0.15.0 --locked
-
-      - name: Build web worker
-        run: |
-          wasm-pack build crates/dzip-worker \
-            --target web \
-            --release \
-            --no-opt \
-            --out-dir ../dzip-gui/assets/worker/pkg \
-            --out-name dzip_gui_worker
-          rm -f crates/dzip-gui/assets/worker/pkg/.gitignore
-
-      - name: Build WASM site
-        run: |
-          REPO_NAME="${GITHUB_REPOSITORY#*/}"
-          RUSTUP_TOOLCHAIN=stable dx build \
-            --package dzip-gui \
-            --platform web \
-            --release \
-            --debug-symbols=false \
-            --base-path "/${REPO_NAME}/"
-          touch "${WEB_DIST}/.nojekyll"
+      - name: Build web app and archive worker
+        run: bash scripts/build-web.sh
 
       - name: Package web artifact
         run: |

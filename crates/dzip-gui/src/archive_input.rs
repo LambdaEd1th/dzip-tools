@@ -9,8 +9,6 @@ pub(crate) type PreparedArchiveFiles = (String, Vec<u8>, Vec<NamedFileBytes>);
 pub(crate) enum DroppedArchiveError {
     NoMainArchive,
     MultipleMainArchives,
-    Read(String),
-    Open(String),
 }
 
 pub(crate) fn prepare_dropped_archive(

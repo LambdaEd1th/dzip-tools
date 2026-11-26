@@ -1,4 +1,4 @@
-use dzip_gui::model::{CompressionChoice, DzCompressionOptions};
+use crate::model::{CompressionChoice, DzCompressionOptions};
 use serde::{Deserialize, Serialize};
 
 const THEME_KEY: &str = "theme";
@@ -54,7 +54,7 @@ pub fn save_archive_preferences(value: &ArchivePreferences) -> Result<(), String
 }
 
 /// Persist editor preferences without blocking a render/input event.
-#[cfg(feature = "desktop")]
+#[cfg(not(target_arch = "wasm32"))]
 pub fn queue_archive_preferences(value: ArchivePreferences) -> Result<(), String> {
     use std::sync::{OnceLock, mpsc};
     use std::time::Duration;
@@ -77,7 +77,7 @@ pub fn queue_archive_preferences(value: ArchivePreferences) -> Result<(), String
                         }
                     }
                     if let Err(error) = save_archive_preferences(&pending) {
-                        log::error!(target: "dzip_gui::preferences", "{error}");
+                        crate::session_log::event!(log::Level::Error, "{error}");
                     }
                 }
             })
@@ -89,7 +89,7 @@ pub fn queue_archive_preferences(value: ArchivePreferences) -> Result<(), String
         .map_err(|_| "preference writer is unavailable".to_string())
 }
 
-#[cfg(feature = "web")]
+#[cfg(target_arch = "wasm32")]
 pub fn queue_archive_preferences(value: ArchivePreferences) -> Result<(), String> {
     save_archive_preferences(&value)
 }
@@ -110,7 +110,7 @@ fn sanitize_archive_preferences(mut value: ArchivePreferences) -> ArchivePrefere
     value
 }
 
-#[cfg(feature = "desktop")]
+#[cfg(not(target_arch = "wasm32"))]
 fn read_preference(key: &str) -> Option<String> {
     let path = preference_path(key)?;
     std::fs::read_to_string(path)
@@ -119,7 +119,7 @@ fn read_preference(key: &str) -> Option<String> {
         .filter(|value| !value.is_empty())
 }
 
-#[cfg(feature = "desktop")]
+#[cfg(not(target_arch = "wasm32"))]
 fn save_preference(key: &str, value: &str) -> Result<(), String> {
     let path = preference_path(key).ok_or_else(|| "无法确定 Dzip Archive 设置目录".to_string())?;
     if let Some(parent) = path.parent() {
@@ -128,7 +128,7 @@ fn save_preference(key: &str, value: &str) -> Result<(), String> {
     std::fs::write(path, value).map_err(|error| error.to_string())
 }
 
-#[cfg(feature = "desktop")]
+#[cfg(not(target_arch = "wasm32"))]
 fn preference_path(key: &str) -> Option<std::path::PathBuf> {
     let base = if cfg!(target_os = "macos") {
         std::env::var_os("HOME")
@@ -146,7 +146,7 @@ fn preference_path(key: &str) -> Option<std::path::PathBuf> {
     Some(base.join("dzip-archive").join(format!("{key}.txt")))
 }
 
-#[cfg(feature = "web")]
+#[cfg(target_arch = "wasm32")]
 fn read_preference(key: &str) -> Option<String> {
     web_sys::window()
         .and_then(|window| window.local_storage().ok().flatten())
@@ -155,7 +155,7 @@ fn read_preference(key: &str) -> Option<String> {
         .filter(|value| !value.is_empty())
 }
 
-#[cfg(feature = "web")]
+#[cfg(target_arch = "wasm32")]
 fn save_preference(key: &str, value: &str) -> Result<(), String> {
     let storage = web_sys::window()
         .ok_or_else(|| "浏览器窗口不可用".to_string())?
@@ -167,7 +167,7 @@ fn save_preference(key: &str, value: &str) -> Result<(), String> {
         .map_err(|error| format!("{error:?}"))
 }
 
-#[cfg(feature = "web")]
+#[cfg(target_arch = "wasm32")]
 fn web_key(key: &str) -> String {
     format!("dzip-archive-{key}")
 }

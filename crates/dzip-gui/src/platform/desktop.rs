@@ -1,12 +1,12 @@
 pub async fn save_bytes(file_name: &str, bytes: Vec<u8>) -> Result<String, String> {
-    let Some(handle) = rfd::AsyncFileDialog::new()
-        .set_file_name(file_name)
-        .save_file()
-        .await
+    let Some(handle) = nsh_core::element::pick_save_path(
+        nsh_core::file_dialog::SaveDialog::new().file_name(file_name),
+    )
+    .await?
     else {
         return Err("已取消保存".to_string());
     };
-    let path = handle.path().to_path_buf();
+    let path = handle;
     crate::task::run_cpu_task(move || {
         std::fs::write(&path, bytes).map_err(|error| format!("保存失败：{error}"))?;
         Ok(path.display().to_string())
@@ -24,14 +24,14 @@ pub async fn save_archive_volumes(
         };
         return save_bytes(file_name, bytes).await;
     }
-    let Some(folder) = rfd::AsyncFileDialog::new()
-        .set_title("选择分卷归档保存目录")
-        .pick_folder()
-        .await
-    else {
+    let Some(folder) = nsh_core::element::pick_paths(
+        nsh_core::file_dialog::OpenDialog::folders().title("选择分卷归档保存目录"),
+    )
+    .await?
+    .and_then(|paths| paths.into_iter().next()) else {
         return Err("已取消保存".to_string());
     };
-    let root = folder.path().to_path_buf();
+    let root = folder;
     crate::task::run_cpu_task(move || {
         let output = volumes
             .iter()
@@ -54,14 +54,14 @@ pub async fn export_files(
     archive_name: &str,
     files: Vec<(String, Vec<u8>)>,
 ) -> Result<String, String> {
-    let Some(folder) = rfd::AsyncFileDialog::new()
-        .set_title("选择解压目录")
-        .pick_folder()
-        .await
-    else {
+    let Some(folder) = nsh_core::element::pick_paths(
+        nsh_core::file_dialog::OpenDialog::folders().title("选择解压目录"),
+    )
+    .await?
+    .and_then(|paths| paths.into_iter().next()) else {
         return Err("已取消解压".to_string());
     };
-    let root = folder.path().to_path_buf();
+    let root = folder;
     let archive_name = archive_name.to_string();
     crate::task::run_cpu_task(move || {
         let output = files
